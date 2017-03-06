@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 
+#include <memory>
+
 using namespace std;
 
 BigInteger::BigInteger(base_t n):digits{n}
@@ -31,15 +33,15 @@ BigInteger::BigInteger(const std::string &s, size_t base) {
 
 string BigInteger::toString(size_t base) const {
     size_t max_len = digits.size()*8;
-    char *buffer = new char[max_len];
-    char *out = buffer + max_len;
+    auto buffer = std::make_unique<char[]>(max_len);
+    char *out = buffer.get() + max_len;
     for(auto n: digits) {
-        for(; out != buffer && n; n/=base) {
+        for(; out != buffer.get() && n; n/=base) {
             *--out = "0123456789ABCDEFGHIJKLMNOPQRSTYVWXYZabcdefghijklmnopqrstyvwxyz"[n % base];
         }
     }
 
-    return string(out,buffer + max_len - out);
+    return string(out+1,buffer.get() + max_len - out);
 }
 
 int BigInteger::compare(const BigInteger &other) const {
@@ -59,7 +61,7 @@ int BigInteger::compare(const BigInteger &other) const {
 }
 
 bool BigInteger::operator<(const BigInteger &other) const {
-
+    return compare(other) < 0;
 }
 
 BigInteger BigInteger::operator+(const BigInteger &other) const {
