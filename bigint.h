@@ -7,13 +7,18 @@
 #include <cmath>
 #include <cctype>
 
-template<uint8_t radix>
 struct bigint_t {
     typedef uint8_t digit_t;
+
+    digit_t radix;
     std::vector<digit_t> digits;
 
     uint32_t guess_divisor(const bigint_t &other) const {
-        if(rank() < 2) {
+        if(radix != other.radix) {
+            return guess_divisor(other.convertToRadix(radix));
+        }
+
+        if(rank() < 2 || other.rank() < 2) {
             return *digits.rbegin()/(*other.digits.rbegin());
         }
 
@@ -22,7 +27,12 @@ struct bigint_t {
 
         uint32_t a = (uint32_t)*u*radix + *(u+1);
         uint32_t b = (uint32_t)*v*radix + *(v+1);
-        return std::min((uint32_t)radix-1,a/b);
+
+        uint32_t q = a/b;
+        if(!q) {
+            q = a/(*v);
+        }
+        return q;
     }
 
     void erase_leading_zeros() {
@@ -35,11 +45,7 @@ struct bigint_t {
         return digits.size();
     }
 
-    bigint_t() {
-
-    }
-
-    bigint_t(uint64_t val, size_t rank=0) {
+    bigint_t(uint64_t val, size_t rank, digit_t _radix):radix(_radix) {
         if(!val) {
             digits.reserve(rank);
         } else {
@@ -53,8 +59,12 @@ struct bigint_t {
         }
     }
 
-    bigint_t(const std::string &s) {
-        digits.reserve(s.size());
+    bigint_t(uint64_t val):bigint_t(val,0,255) {
+
+    }
+
+    bigint_t(const std::string &s,digit_t _radix):radix(255) {
+        bigint_t tmp(0,s.size(),_radix);
 
         digit_t val = 0;
         for(auto i=s.rbegin();i!=s.rend();++i) {
@@ -68,12 +78,22 @@ struct bigint_t {
                 break;
             }
 
-            if(val >= radix) break;
-            digits.push_back(val);
+            if(val >= _radix) break;
+            tmp.digits.push_back(val);
+        }
+
+        //digits.reserve(ceil(s.size()/(log(radix)/log(_radix))));
+        for(;tmp;tmp = tmp/radix) {
+            digits.push_back(tmp%radix);
         }
     }
 
     int compare(const bigint_t &other) const {
+
+        if(radix != other.radix) {
+            return compare(other.convertToRadix(radix));
+        }
+
         if(rank() == other.rank()) {
             auto a = digits.rbegin();
             auto b = other.digits.rbegin();
@@ -114,6 +134,10 @@ struct bigint_t {
     }
 
     bigint_t& operator+=(const bigint_t &other) {
+        if(radix != other.radix) {
+            return operator+=(other.convertToRadix(radix));
+        }
+
         if(rank() < other.rank()) {
             digits.reserve(other.rank()+1);
             digits.resize(other.rank());
@@ -143,6 +167,10 @@ struct bigint_t {
     }
 
     bigint_t& operator-=(const bigint_t &other) {
+        if(radix != other.radix) {
+            return operator-=(other.convertToRadix(radix));
+        }
+
         if(rank() < other.rank()) {
             digits.reserve(other.rank()+1);
         }
@@ -179,14 +207,22 @@ struct bigint_t {
     }
 
     bigint_t operator+(const bigint_t &other) const {
-        bigint_t sum(0,std::max(rank(),other.rank())+1);
+        if(radix != other.radix) {
+            return operator+(other.convertToRadix(radix));
+        }
+
+        bigint_t sum(0,std::max(rank(),other.rank())+1,radix);
         sum.digits.assign(digits.begin(),digits.end());
         sum += other;
         return sum;
     }
 
     bigint_t operator-(const bigint_t &other) const {
-        bigint_t sum(0,std::max(rank(),other.rank())+1);
+        if(radix != other.radix) {
+            return operator-(other.convertToRadix(radix));
+        }
+
+        bigint_t sum(0,std::max(rank(),other.rank())+1,radix);
         sum.digits.assign(digits.begin(),digits.end());
         sum -= other;
         return sum;
@@ -194,7 +230,7 @@ struct bigint_t {
 
     bigint_t operator<<(size_t shift) const {
         size_t new_size = rank()+shift;
-        bigint_t result(0,new_size);
+        bigint_t result(0,new_size,radix);
         result.digits.resize(new_size);
         std::copy(digits.begin(),digits.end(),result.digits.begin()+shift);
         return result;
@@ -202,24 +238,28 @@ struct bigint_t {
 
     bigint_t operator>>(size_t shift) const {
         if(shift >= rank()) {
-            return bigint_t(0);
+            return bigint_t(0,0,radix);
         }
 
         size_t new_size = rank() - shift;
-        bigint_t result(0,new_size);
+        bigint_t result(0,new_size,radix);
         result.digits.resize(new_size);
         std::copy(digits.begin()+shift,digits.end(),result.digits.begin());
         return result;
     }
 
     bigint_t operator*(const bigint_t &other) const {
-        bigint_t total(0,rank()+other.rank()+1);
+        if(radix != other.radix) {
+            return operator*(other.convertToRadix(radix));
+        }
+
+        bigint_t total(0,rank()+other.rank()+1,radix);
 
         for(auto a=digits.begin();a!=digits.end();++a) {
             for(auto b=other.digits.begin();b!=other.digits.end();++b) {
                 size_t rank = (a - digits.begin()) + (b - other.digits.begin());
                 uint16_t p = (uint16_t)*a * *b;
-                bigint_t product(p,rank);
+                bigint_t product(p,rank,radix);
                 total += product;
             }
         }
@@ -239,7 +279,7 @@ struct bigint_t {
     }
 
     bigint_t operator/(uint32_t n) const {
-        bigint_t total(0,rank());
+        bigint_t total(0,rank(),radix);
 
         uint64_t current = 0;
 
@@ -247,7 +287,7 @@ struct bigint_t {
             current = current*radix + *i;
             if(current >= n) {
                 size_t rank = digits.rend() - i - 1;
-                total += bigint_t(current/n,rank);
+                total += bigint_t(current/n,rank,radix);
                 current %= n;
             }
         }
@@ -256,79 +296,94 @@ struct bigint_t {
     }
 
     bigint_t operator/(const bigint_t &other) const {
-        bigint_t total(0,rank());
+        if(radix != other.radix) {
+            return operator/(other.convertToRadix(radix));
+        }
+
+        bigint_t total(0,rank(),radix);
         bigint_t current(*this);
 
-        for(int i=0;current.compare(other) >= 0;++i) {
+        for(int i=0;current.compare(other) > 0;++i) {
             auto q = current.guess_divisor(other);
-            bigint_t sub = other*bigint_t(q);
+            bigint_t sub = other*bigint_t(q,0,radix);
             int rank_diff = std::max(0,(int)current.rank() - (int)sub.rank());
             bigint_t head = current >> rank_diff;
 
 //            fprintf(stderr,"1cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                    current.toString().c_str(),
-//                    other.toString().c_str(),
+//                    current.toString(radix).c_str(),
+//                    other.toString(radix).c_str(),
 //                    q,
 //                    rank_diff,
-//                    head.toString().c_str(),
-//                    sub.toString().c_str());
+//                    head.toString(radix).c_str(),
+//                    sub.toString(radix).c_str());
 
             for(;q && sub > head;--q) {
                 sub -= other;
             }
 
 //            fprintf(stderr,"2cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                    current.toString().c_str(),
-//                    other.toString().c_str(),
+//                    current.toString(radix).c_str(),
+//                    other.toString(radix).c_str(),
 //                    q,
 //                    rank_diff,
-//                    head.toString().c_str(),
-//                    sub.toString().c_str());
+//                    head.toString(radix).c_str(),
+//                    sub.toString(radix).c_str());
 
             if(!q && rank_diff) {
                 q = radix - 1;
-                sub = other*bigint_t(q);
+                sub = other*bigint_t(q,0,radix);
                 rank_diff = std::max(0,(int)current.rank() - (int)sub.rank());
-//                bigint_t head = current >> rank_diff;
+                bigint_t head = current >> rank_diff;
 
 //                fprintf(stderr,"3cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                        current.toString().c_str(),
-//                        other.toString().c_str(),
+//                        current.toString(radix).c_str(),
+//                        other.toString(radix).c_str(),
 //                        q,
 //                        rank_diff,
-//                        head.toString().c_str(),
-//                        sub.toString().c_str());
+//                        head.toString(radix).c_str(),
+//                        sub.toString(radix).c_str());
             }
 
             current -= sub << rank_diff;
 
-            total += bigint_t(q,rank_diff);
+            total += bigint_t(q,rank_diff,radix);
         }
 
         int cmp = current.compare(other);
         if(cmp == 0) {
-            return total + bigint_t(1);
+            return total + bigint_t(1,0,radix);
         }
         return total;
     }
 
-    std::string toString() const {
-        auto buffer = std::make_unique<char[]>(rank());
-        char* out = buffer.get() + rank();
-        for(auto n: digits) {
-            *--out = "0123456789ABCDEFGHIJKLMNOPQRSTYVWXYZabcdefghijklmnopqrstyvwxyz"[n];
+    std::string toString(digit_t view_radix=10) const {
+        const bigint_t &view = (radix == view_radix) ? *this : convertToRadix(view_radix);
+
+        const char *single_digits = "0123456789ABCDEFGHIJKLMNOPQRSTYVWXYZabcdefghijklmnopqrstyvwxyz";
+        const size_t digit_len = view_radix <= strlen(single_digits) ? 1 : 4;
+
+        auto buffer = std::make_unique<char[]>(view.rank()*digit_len);
+        char* out = buffer.get() + view.rank()*digit_len;
+        for(auto n: view.digits) {
+            if(digit_len == 1) {
+                *--out = single_digits[n];
+            } else {
+                *--out = ']';
+                *--out = single_digits[n & 0xF];
+                *--out = single_digits[n >> 4];
+                *--out = '[';
+            }
         }
 
-        return std::string(out,rank());
+        return std::string(out,view.rank()*digit_len);
     }
 
     explicit operator bool() const {
         return rank() != 0;
     }
 
-    template<uint8_t new_radix>
-    explicit operator bigint_t<new_radix>() const {
-        bigint_t<new_radix> result(0,ceil(rank()/(log(new_radix)/log(radix))));
+    bigint_t convertToRadix(digit_t new_radix) const {
+        bigint_t result(0,ceil(rank()/(log(new_radix)/log(radix))),new_radix);
         bigint_t current(*this);
 
         for(bigint_t current=*this;current;current = current/new_radix) {
