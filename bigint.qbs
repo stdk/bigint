@@ -5,11 +5,27 @@ Project {
     name: "bigint"
 
     CppApplication {
+        name: "test"
         consoleApplication: true
         files: [
             "bigint.h",
             "catch.hpp",
-            "main.cpp",
+            "test.cpp",
+        ]
+
+        Group {     // Properties for the produced executable
+            fileTagsFilter: product.type
+            qbs.install: true
+        }
+    }
+
+    CppApplication {
+        name: "calc"
+        consoleApplication: true
+        files: [
+            "bigint.h",
+            "calc.cpp",
+            "test.py",
         ]
 
         Group {     // Properties for the produced executable

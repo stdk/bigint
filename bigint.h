@@ -3,10 +3,15 @@
 
 #include <string>
 #include <vector>
+#include <limits>
+#include <memory>
+
+#include <cstdio>
+#include <cstring>
 #include <cstdint>
 #include <cmath>
 #include <cctype>
-#include <limits>
+
 
 //#define DEBUG_BIGINT
 
@@ -367,6 +372,8 @@ struct bigint_t {
     }
 
     std::string toString(digit_t view_radix=10) const {
+        if(!rank()) return std::string("0");
+
         const bigint_t &view = (radix == view_radix) ? *this : convertToRadix(view_radix);
 
         const char *single_digits = "0123456789ABCDEFGHIJKLMNOPQRSTYVWXYZabcdefghijklmnopqrstyvwxyz";
