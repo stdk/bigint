@@ -1,16 +1,22 @@
 import qbs
 
-CppApplication {
-    consoleApplication: true
-    files: [
-        "biginteger.cpp",
-        "biginteger.h",
-        "catch.hpp",
-        "main.cpp",
-    ]
+Project {
+    minimumQbsVersion: "1.6"
+    name: "bigint"
 
-    Group {     // Properties for the produced executable
-        fileTagsFilter: product.type
-        qbs.install: true
+    CppApplication {
+        consoleApplication: true
+        files: [
+            "bigint.h",
+            "catch.hpp",
+            "main.cpp",
+        ]
+
+        Group {     // Properties for the produced executable
+            fileTagsFilter: product.type
+            qbs.install: true
+        }
     }
 }
+
+
