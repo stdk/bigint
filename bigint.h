@@ -6,9 +6,12 @@
 #include <cstdint>
 #include <cmath>
 #include <cctype>
+#include <limits>
+
+//#define DEBUG_BIGINT
 
 struct bigint_t {
-    typedef uint8_t digit_t;
+    typedef uint32_t digit_t;
 
     digit_t radix;
     std::vector<digit_t> digits;
@@ -18,17 +21,21 @@ struct bigint_t {
             return guess_divisor(other.convertToRadix(radix));
         }
 
-        if(rank() < 2 || other.rank() < 2) {
+        if(rank() < 2) {
             return *digits.rbegin()/(*other.digits.rbegin());
         }
 
         auto u = digits.rbegin();
         auto v = other.digits.rbegin();
 
-        uint32_t a = (uint32_t)*u*radix + *(u+1);
-        uint32_t b = (uint32_t)*v*radix + *(v+1);
+        uint64_t a = (uint64_t)*u*radix + *(u+1);
 
-        uint32_t q = a/b;
+        uint64_t q = 0;
+        if(other.rank() > 1) {
+            uint64_t b = (uint64_t)*v*radix + *(v+1);
+            q = a/b;
+        }
+
         if(!q) {
             q = a/(*v);
         }
@@ -59,11 +66,11 @@ struct bigint_t {
         }
     }
 
-    bigint_t(uint64_t val):bigint_t(val,0,255) {
+    bigint_t(uint64_t val):bigint_t(val,0,std::numeric_limits<digit_t>::max()) {
 
     }
 
-    bigint_t(const std::string &s,digit_t _radix):radix(255) {
+    bigint_t(const std::string &s,digit_t _radix):radix(std::numeric_limits<digit_t>::max()) {
         bigint_t tmp(0,s.size(),_radix);
 
         digit_t val = 0;
@@ -148,13 +155,13 @@ struct bigint_t {
 
         digit_t extra = 0;
         for(;a != digits.end() && b != other.digits.end();++a,++b) {
-            uint16_t val = *a + *b + extra;
+            uint64_t val = (uint64_t)*a + *b + extra;
             *a = val % radix;
             extra = val / radix;
         }
 
         for(;extra && a != digits.end();++a) {
-            uint16_t val = *a + extra;
+            uint64_t val = (uint64_t)*a + extra;
             *a = val % radix;
             extra = val / radix;
         }
@@ -180,19 +187,19 @@ struct bigint_t {
 
         digit_t extra = 0;
         for(;a != digits.end() && b != other.digits.end();++a,++b) {
-            uint16_t val = radix + *a - *b - extra;
+            uint64_t val = (uint64_t)radix + *a - *b - extra;
             *a = val % radix;
             extra = 1 - val / radix;
         }
 
         for(;extra && a != digits.end();++a) {
-            uint16_t val = radix + *a - extra;
+            uint64_t val = (uint64_t)radix + *a - extra;
             *a = val % radix;
             extra = 1 - val / radix;
         }
 
         for(;b != other.digits.end();++b) {
-            uint16_t val = radix - *b - extra;
+            uint64_t val = (uint64_t)radix - *b - extra;
             digits.push_back(val % radix);
             extra = 1 - val / radix;
         }
@@ -258,7 +265,7 @@ struct bigint_t {
         for(auto a=digits.begin();a!=digits.end();++a) {
             for(auto b=other.digits.begin();b!=other.digits.end();++b) {
                 size_t rank = (a - digits.begin()) + (b - other.digits.begin());
-                uint16_t p = (uint16_t)*a * *b;
+                uint64_t p = (uint64_t)*a * *b;
                 bigint_t product(p,rank,radix);
                 total += product;
             }
@@ -268,8 +275,8 @@ struct bigint_t {
     }
 
     uint32_t operator%(uint32_t n) const {
-        uint32_t total = 0;
-        uint32_t base = 1;
+        uint64_t total = 0;
+        uint64_t base = 1;
         for(auto i: digits) {
             total += (i % n) * base;
             total %= n;
@@ -308,40 +315,43 @@ struct bigint_t {
             bigint_t sub = other*bigint_t(q,0,radix);
             int rank_diff = std::max(0,(int)current.rank() - (int)sub.rank());
             bigint_t head = current >> rank_diff;
-
-//            fprintf(stderr,"1cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                    current.toString(radix).c_str(),
-//                    other.toString(radix).c_str(),
-//                    q,
-//                    rank_diff,
-//                    head.toString(radix).c_str(),
-//                    sub.toString(radix).c_str());
-
+#ifdef DEBUG_BIGINT
+            fprintf(stderr,"1cur[%s] other[%s] q[%u] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
+                    current.toString(radix).c_str(),
+                    other.toString(radix).c_str(),
+                    q,
+                    rank_diff,
+                    head.toString(radix).c_str(),
+                    sub.toString(radix).c_str());
+#endif
             for(;q && sub > head;--q) {
                 sub -= other;
             }
-
-//            fprintf(stderr,"2cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                    current.toString(radix).c_str(),
-//                    other.toString(radix).c_str(),
-//                    q,
-//                    rank_diff,
-//                    head.toString(radix).c_str(),
-//                    sub.toString(radix).c_str());
-
+#ifdef DEBUG_BIGINT
+            fprintf(stderr,"2cur[%s] other[%s] q[%u] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
+                    current.toString(radix).c_str(),
+                    other.toString(radix).c_str(),
+                    q,
+                    rank_diff,
+                    head.toString(radix).c_str(),
+                    sub.toString(radix).c_str());
+#endif
             if(!q && rank_diff) {
                 q = radix - 1;
                 sub = other*bigint_t(q,0,radix);
                 rank_diff = std::max(0,(int)current.rank() - (int)sub.rank());
+
+#ifdef DEBUG_BIGINT
                 bigint_t head = current >> rank_diff;
 
-//                fprintf(stderr,"3cur[%s] other[%s] q[%d] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
-//                        current.toString(radix).c_str(),
-//                        other.toString(radix).c_str(),
-//                        q,
-//                        rank_diff,
-//                        head.toString(radix).c_str(),
-//                        sub.toString(radix).c_str());
+                fprintf(stderr,"3cur[%s] other[%s] q[%u] rank_diff[%d]\nhead[%s]\n sub[%s]\n",
+                        current.toString(radix).c_str(),
+                        other.toString(radix).c_str(),
+                        q,
+                        rank_diff,
+                        head.toString(radix).c_str(),
+                        sub.toString(radix).c_str());
+#endif
             }
 
             current -= sub << rank_diff;
@@ -360,7 +370,7 @@ struct bigint_t {
         const bigint_t &view = (radix == view_radix) ? *this : convertToRadix(view_radix);
 
         const char *single_digits = "0123456789ABCDEFGHIJKLMNOPQRSTYVWXYZabcdefghijklmnopqrstyvwxyz";
-        const size_t digit_len = view_radix <= strlen(single_digits) ? 1 : 4;
+        const size_t digit_len = view_radix <= strlen(single_digits) ? 1 : (sizeof(digit_t)*2+2);
 
         auto buffer = std::make_unique<char[]>(view.rank()*digit_len);
         char* out = buffer.get() + view.rank()*digit_len;
@@ -369,8 +379,9 @@ struct bigint_t {
                 *--out = single_digits[n];
             } else {
                 *--out = ']';
-                *--out = single_digits[n & 0xF];
-                *--out = single_digits[n >> 4];
+                for(size_t shift=0;shift < sizeof(digit_t)*8;shift += 4) {
+                    *--out = single_digits[(n >> shift) & 0xF];
+                }
                 *--out = '[';
             }
         }
