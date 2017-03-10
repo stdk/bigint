@@ -1,5 +1,5 @@
-#ifndef BIGINTEGER_H
-#define BIGINTEGER_H
+#ifndef BIGINT_H
+#define BIGINT_H
 
 #include <string>
 #include <vector>
@@ -8,11 +8,8 @@
 #include <cctype>
 
 template<uint8_t radix>
-class bigint_t {
-public:
+struct bigint_t {
     typedef uint8_t digit_t;
-
-private:
     std::vector<digit_t> digits;
 
     uint32_t guess_divisor(const bigint_t &other) const {
@@ -34,7 +31,6 @@ private:
         digits.resize(digits.rend() - i);
     }
 
-public:
     inline size_t rank() const {
         return digits.size();
     }
@@ -326,10 +322,21 @@ public:
         return std::string(out,rank());
     }
 
+    explicit operator bool() const {
+        return rank() != 0;
+    }
+
     template<uint8_t new_radix>
     explicit operator bigint_t<new_radix>() const {
-        return bigint_t<new_radix>(0);
+        bigint_t<new_radix> result(0,ceil(rank()/(log(new_radix)/log(radix))));
+        bigint_t current(*this);
+
+        for(bigint_t current=*this;current;current = current/new_radix) {
+            result.digits.push_back(current%new_radix);
+        }
+
+        return result;
     }
 };
 
-#endif // BIGINTEGER_H
+#endif // BIGINT_H

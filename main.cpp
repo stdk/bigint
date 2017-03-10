@@ -7,6 +7,10 @@ TEST_CASE("bigint_t-1","") {
     const std::string &a_str = "123456789ABCDEF";
     bigint_t<16> a(a_str);
     REQUIRE(a.toString() == a_str);
+
+    REQUIRE((bigint_t<16>("123456789000000") + bigint_t<16>(0xABCDEF)).toString() == a_str);
+
+    REQUIRE(static_cast<bigint_t<10>>(bigint_t<16>("AAABBBCCCDDDEEEFFF")).toString() == "3148321202116318130175");
 }
 
 TEST_CASE("bigint_t-2","") {
